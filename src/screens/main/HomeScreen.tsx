@@ -8,47 +8,42 @@
 // - Estado global con Redux Toolkit (items, loading, error)
 // - Conexión real a Supabase (lectura y escritura)
 // - Contexto global de tema (colores claro/oscuro)
+//
+// El botón "+" ahora navega a una pantalla modal dedicada
+// (CreateProductScreen) en vez de abrir un <Modal> aquí mismo.
 // ─────────────────────────────────────────────
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   SafeAreaView,
-  Modal,
   TouchableOpacity,
   RefreshControl,
   Alert,
 } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import EcoCard from "../../components/EcoCard";
-import CustomInput from "../../components/CustomInput";
-import CustomButton from "../../components/CustomButton";
 import { useTheme } from "../../context/ThemeContext";
-import { useAuth } from "../../context/AuthContext";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { fetchArticles, createArticle } from "../../store/articlesSlice";
-import { isNotEmpty } from "../../utils/validators";
+import { fetchArticles } from "../../store/articlesSlice";
+import type { RootStackParamList } from "../../navigation/AppNavigator";
 
 const HomeScreen: React.FC = () => {
   // Colores según el tema activo (claro u oscuro)
   const { colors } = useTheme();
 
-  // Usuario actual (necesitamos su id para publicar artículos)
-  const { user } = useAuth();
-
   // Estado global de artículos (Redux)
   const dispatch = useAppDispatch();
   const { items, loading, error } = useAppSelector((state) => state.articles);
 
-  // Estado local: visibilidad del modal para publicar un artículo
-  const [modalVisible, setModalVisible] = useState(false);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState("");
-  const [titleError, setTitleError] = useState("");
-  const [publishing, setPublishing] = useState(false);
+  // Navegación: HomeScreen vive dentro de MainTabs, que a su vez vive
+  // dentro del Stack raíz. Por eso usamos getParent() para navegar
+  // a una pantalla que está al mismo nivel que MainTabs (CreateProduct).
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   // Al entrar a la pantalla, pedimos los artículos a Supabase
   useEffect(() => {
@@ -60,37 +55,9 @@ const HomeScreen: React.FC = () => {
     dispatch(fetchArticles());
   };
 
-  // Publicar un nuevo artículo
-  const handlePublish = async () => {
-    setTitleError("");
-
-    if (!isNotEmpty(title)) {
-      setTitleError("El título es obligatorio");
-      return;
-    }
-    if (!user) return;
-
-    setPublishing(true);
-    const result = await dispatch(
-      createArticle({
-        title: title.trim(),
-        description: description.trim(),
-        category: category.trim() || "General",
-        user_id: user.id,
-      })
-    );
-    setPublishing(false);
-
-    if (createArticle.rejected.match(result)) {
-      Alert.alert("No se pudo publicar", String(result.payload));
-      return;
-    }
-
-    // Limpiar formulario y cerrar modal
-    setTitle("");
-    setDescription("");
-    setCategory("");
-    setModalVisible(false);
+  // Navega a la pantalla modal para publicar un nuevo producto
+  const goToCreateProduct = () => {
+    navigation.getParent()?.navigate("CreateProduct");
   };
 
   return (
@@ -120,7 +87,7 @@ const HomeScreen: React.FC = () => {
             category={item.category ?? "General"}
             location="Cerca de ti"
             isAvailable={true}
-            onPress={() => Alert.alert(item.title, item.description ?? "Sin descripción")}
+            onPress={() => navigation.getParent()?.navigate("ProductDetail", { articleId: item.id })}
           />
         )}
         refreshControl={
@@ -133,57 +100,18 @@ const HomeScreen: React.FC = () => {
             </Text>
           ) : null
         }
-        // Espacio al final de la lista para que no quede pegado
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Botón flotante para publicar un nuevo artículo */}
+      {/* Botón flotante para ir a la pantalla de publicar un nuevo artículo */}
       <TouchableOpacity
         style={[styles.fab, { backgroundColor: colors.primary }]}
-        onPress={() => setModalVisible(true)}
+        onPress={goToCreateProduct}
         activeOpacity={0.85}
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
-
-      {/* Modal: formulario para publicar un artículo */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: colors.primary }]}>
-              Publicar artículo
-            </Text>
-
-            <CustomInput
-              label="Título"
-              value={title}
-              onChangeText={setTitle}
-              placeholder="Ej. Bicicleta usada"
-              errorMessage={titleError}
-            />
-            <CustomInput
-              label="Categoría"
-              value={category}
-              onChangeText={setCategory}
-              placeholder="Ej. Deportes"
-            />
-            <CustomInput
-              label="Descripción"
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Cuéntanos del artículo"
-            />
-
-            <CustomButton title="Publicar" onPress={handlePublish} loading={publishing} />
-            <CustomButton
-              title="Cancelar"
-              variant="outline"
-              onPress={() => setModalVisible(false)}
-            />
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 };
@@ -196,7 +124,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 12,
-    // Sombra ligera en el encabezado
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -218,7 +145,7 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingVertical: 12,
-    paddingBottom: 100, // Espacio extra para la tab bar y el FAB
+    paddingBottom: 100,
   },
   emptyText: {
     textAlign: "center",
@@ -246,21 +173,6 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "700",
     marginTop: -2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    marginBottom: 16,
   },
 });
 

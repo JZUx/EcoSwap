@@ -9,10 +9,12 @@
 
 import { configureStore } from "@reduxjs/toolkit";
 import articlesReducer from "./articlesSlice";
+import profileReducer from "./profileSlice";
 
-export const store = configureStore({
+export const store = configureStore ({
   reducer: {
     articles: articlesReducer,
+    profile: profileReducer,
   },
 });
 

@@ -2,10 +2,12 @@
 // screens/main/ProfileScreen.tsx
 // Pantalla de perfil del usuario.
 // Muestra los datos reales del usuario autenticado (Supabase),
-// permite cerrar sesión de verdad y cambiar el tema claro/oscuro.
+// permite cerrar sesión, cambiar tema, y ahora también
+// editar teléfono + ubicación (departamento/ciudad), que se
+// reutilizan automáticamente en todas sus publicaciones.
 // ─────────────────────────────────────────────
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -13,11 +15,16 @@ import {
   ScrollView,
   SafeAreaView,
   Switch,
+  Alert,
 } from "react-native";
 import CustomButton from "../../components/CustomButton";
+import CustomInput from "../../components/CustomInput";
+import CategoryDropdown from "../../components/CategoryDropdown";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
-import { useAppSelector } from "../../store/hooks";
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { fetchMyProfile, saveMyProfile } from "../../store/profileSlice";
+import { HONDURAS_DEPARTMENTS } from "../../utils/Honduras";
 
 // Componente auxiliar para mostrar cada estadística
 const StatBox: React.FC<{ value: string | number; label: string; color: string; labelColor: string }> = (
@@ -48,16 +55,52 @@ const InfoRow: React.FC<{
 );
 
 const ProfileScreen: React.FC = () => {
-  // Usuario real autenticado en Supabase
   const { user, signOut } = useAuth();
-  // Tema activo y función para alternarlo
   const { colors, mode, toggleTheme } = useTheme();
-  // Cantidad de artículos publicados por este usuario (desde Redux)
+  const dispatch = useAppDispatch();
+
   const articles = useAppSelector((state) => state.articles.items);
   const myArticlesCount = articles.filter((a) => a.user_id === user?.id).length;
 
+  // Perfil (teléfono + ubicación) desde Redux
+  const { data: profile, loading: profileLoading } = useAppSelector((state) => state.profile);
+
+  const [phone, setPhone] = useState("");
+  const [department, setDepartment] = useState("");
+  const [city, setCity] = useState("");
+  const [saving, setSaving] = useState(false);
+
   const displayName =
     (user?.user_metadata?.full_name as string | undefined) || user?.email || "Usuario";
+
+  // Al entrar a la pantalla, traemos el perfil real del usuario
+  useEffect(() => {
+    if (user) dispatch(fetchMyProfile(user.id));
+  }, [dispatch, user]);
+
+  // Cuando llega el perfil desde Supabase, precargamos el formulario
+  useEffect(() => {
+    if (profile) {
+      setPhone(profile.phone ?? "");
+      setDepartment(profile.department ?? "");
+      setCity(profile.city ?? "");
+    }
+  }, [profile]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    setSaving(true);
+    const result = await dispatch(
+      saveMyProfile({ id: user.id, phone: phone.trim(), department, city: city.trim() })
+    );
+    setSaving(false);
+
+    if (saveMyProfile.rejected.match(result)) {
+      Alert.alert("No se pudo guardar", String(result.payload));
+      return;
+    }
+    Alert.alert("Listo", "Tu información de contacto se actualizó correctamente.");
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
@@ -65,7 +108,6 @@ const ProfileScreen: React.FC = () => {
 
         {/* Sección de avatar y nombre */}
         <View style={[styles.heroSection, { backgroundColor: colors.primary }]}>
-          {/* Avatar generado con iniciales (sin imagen de red) */}
           <View style={[styles.avatar, { backgroundColor: colors.accent }]}>
             <Text style={[styles.avatarText, { color: colors.surface }]}>
               {displayName.charAt(0).toUpperCase()}
@@ -73,7 +115,7 @@ const ProfileScreen: React.FC = () => {
           </View>
           <Text style={[styles.userName, { color: colors.surface }]}>{displayName}</Text>
           <Text style={[styles.userLocation, { color: colors.primaryLight }]}>
-            📍 Honduras
+            📍 {city && department ? `${city}, ${department}` : "Honduras"}
           </Text>
         </View>
 
@@ -96,6 +138,44 @@ const ProfileScreen: React.FC = () => {
             borderColor={colors.border}
             labelColor={colors.textSecondary}
             valueColor={colors.textPrimary}
+          />
+        </View>
+
+        {/* Información de contacto: teléfono + ubicación */}
+        <View style={[styles.card, { backgroundColor: colors.surface }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+            Información de contacto
+          </Text>
+          <Text style={{ color: colors.textSecondary, fontSize: 12, marginBottom: 14 }}>
+            Esta información se mostrará a otros usuarios interesados en tus artículos.
+          </Text>
+
+          <CustomInput
+            label="Teléfono"
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="Ej. 9999-9999"
+            keyboardType="phone-pad"
+          />
+
+          <CategoryDropdown
+            label="Departamento"
+            selected={department}
+            options={HONDURAS_DEPARTMENTS}
+            onSelect={setDepartment}
+          />
+
+          <CustomInput
+            label="Ciudad"
+            value={city}
+            onChangeText={setCity}
+            placeholder="Ej. San Pedro Sula"
+          />
+
+          <CustomButton
+            title="Guardar información"
+            onPress={handleSaveProfile}
+            loading={saving || profileLoading}
           />
         </View>
 

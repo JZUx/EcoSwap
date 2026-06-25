@@ -13,11 +13,14 @@ import AuthStack from "./AuthStack";
 import MainTabs from "./MainTabs";
 import { useAuth } from "../context/AuthContext";
 import colors from "../theme/colors";
+import CreateProductScreen from "../screens/main/CreateProductScreen";
+import ProductDetailScreen from "../screens/main/ProductDetailScreen";
 
-// Rutas raíz: Auth (sin sesión) y MainTabs (con sesión)
 export type RootStackParamList = {
   Auth: undefined;
   MainTabs: undefined;
+  CreateProduct: { articleId?: string }; 
+  ProductDetail: { articleId: string };
 };
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
@@ -47,12 +50,20 @@ const AppNavigator: React.FC = () => {
       screenOptions={{ headerShown: false }}
     >
       {session ? (
-        // Usuario con sesión: solo puede ver el flujo principal
-        <RootStack.Screen name="MainTabs" component={MainTabs} />
-      ) : (
-        // Usuario sin sesión: solo puede ver el flujo de autenticación
-        <RootStack.Screen name="Auth" component={AuthStack} />
-      )}
+  // Usuario con sesión: ve el flujo principal + la pantalla modal de crear producto
+  <>
+  <RootStack.Screen name="MainTabs" component={MainTabs} />
+  <RootStack.Screen
+    name="CreateProduct"
+    component={CreateProductScreen}
+    options={{ presentation: "modal" }}
+  />
+  <RootStack.Screen name="ProductDetail" component={ProductDetailScreen} />
+</>
+) : (
+  // Usuario sin sesión: solo puede ver el flujo de autenticación
+  <RootStack.Screen name="Auth" component={AuthStack} />
+)}
     </RootStack.Navigator>
   );
 };

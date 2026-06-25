@@ -13,7 +13,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { supabase } from "../lib/supabase";
 
-// Forma de un artículo tal como vive en la tabla de Supabase
 export interface Article {
   id: string;
   user_id: string;
@@ -21,6 +20,7 @@ export interface Article {
   description: string | null;
   category: string | null;
   image_url: string | null;
+  images: string[]; 
   created_at: string;
 }
 
@@ -50,11 +50,17 @@ export const fetchArticles = createAsyncThunk(
   }
 );
 
-// ── Thunk: publicar un nuevo artículo ──
+// ── Thunk: publicar un nuevo artículo (ahora con múltiples imágenes) ──
 export const createArticle = createAsyncThunk(
   "articles/createArticle",
   async (
-    payload: { title: string; description: string; category: string; user_id: string },
+    payload: {
+      title: string;
+      description: string;
+      category: string;
+      user_id: string;
+      images: string[]; // URLs públicas ya subidas a Supabase Storage
+    },
     { rejectWithValue }
   ) => {
     const { data, error } = await supabase
@@ -64,12 +70,56 @@ export const createArticle = createAsyncThunk(
         description: payload.description,
         category: payload.category,
         user_id: payload.user_id,
+        images: payload.images,
+        // Guardamos la primera foto también en image_url por compatibilidad
+        image_url: payload.images[0] ?? null,
       })
       .select()
       .single();
 
     if (error) return rejectWithValue(error.message);
     return data as Article;
+  }
+);
+
+// ── Thunk: actualizar un artículo existente ──
+export const updateArticle = createAsyncThunk(
+  "articles/updateArticle",
+  async (
+    payload: {
+      id: string;
+      title: string;
+      description: string;
+      category: string;
+      images: string[];
+    },
+    { rejectWithValue }
+  ) => {
+    const { data, error } = await supabase
+      .from("articles")
+      .update({
+        title: payload.title,
+        description: payload.description,
+        category: payload.category,
+        images: payload.images,
+        image_url: payload.images[0] ?? null,
+      })
+      .eq("id", payload.id)
+      .select()
+      .single();
+
+    if (error) return rejectWithValue(error.message);
+    return data as Article;
+  }
+);
+
+// ── Thunk: eliminar un artículo ──
+export const deleteArticle = createAsyncThunk(
+  "articles/deleteArticle",
+  async (articleId: string, { rejectWithValue }) => {
+    const { error } = await supabase.from("articles").delete().eq("id", articleId);
+    if (error) return rejectWithValue(error.message);
+    return articleId; // devolvemos el id para quitarlo del estado local
   }
 );
 
@@ -97,6 +147,17 @@ const articlesSlice = createSlice({
       // createArticle: agregamos el nuevo artículo al inicio de la lista
       .addCase(createArticle.fulfilled, (state, action) => {
         state.items.unshift(action.payload);
+      })
+      // updateArticle: actualizamos un artículo existente
+      .addCase(updateArticle.fulfilled, (state, action) => {
+        const index = state.items.findIndex((item) => item.id === action.payload.id);
+        if (index !== -1) {
+          state.items[index] = action.payload;
+        }
+      })
+      // deleteArticle: eliminamos un artículo
+      .addCase(deleteArticle.fulfilled, (state, action) => {
+        state.items = state.items.filter((item) => item.id !== action.payload);
       });
   },
 });
