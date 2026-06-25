@@ -24,7 +24,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { fetchMyProfile, saveMyProfile } from "../../store/profileSlice";
-import { HONDURAS_DEPARTMENTS } from "../../utils/Honduras";
+import { HONDURAS_DEPARTMENTS } from "../../utils/honduras";
 
 // Componente auxiliar para mostrar cada estadística
 const StatBox: React.FC<{ value: string | number; label: string; color: string; labelColor: string }> = (
